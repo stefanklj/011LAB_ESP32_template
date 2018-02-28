@@ -1,0 +1,28 @@
+menu "Example Configuration"
+
+config BUTTON_PIN
+    int "Number of the PIN connected to the BUTTON"
+	range 0 34
+	default 0
+
+config LED_PIN
+    int "Number of the PIN connected to the LED"
+	range 0 34
+	default 5
+	
+config WIFI_SSID
+    string "WiFi SSID"
+	default "myssid"
+	help
+		SSID (network name) for the example to connect to.
+
+config WIFI_PASSWORD
+    string "WiFi Password"
+	default "myssid"
+	help
+		WiFi password (WPA or WPA2) for the example to use.
+
+		Can be left blank if the network has no security set.
+
+
+endmenu
