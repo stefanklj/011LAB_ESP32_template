@@ -3,3 +3,13 @@
 *.a
 *.a
 *.elf
+*.bin
+*.elf
+*.map
+*.a
+*.o
+*.a
+*.a
+*.map
+*.elf
+*.bin

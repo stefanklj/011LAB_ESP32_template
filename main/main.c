@@ -53,6 +53,10 @@
 #define EXAMPLE_WIFI_PASS CONFIG_WIFI_PASSWORD
 #define TELNET_PORT 23
 
+#define triger_pin_sensor1 13
+#define echo_pin_sensor1 9
+#define triger_pin_sensor2 14
+
 typedef struct {
 	int type;  // the type of timer's event
 	int timer_group;
@@ -68,9 +72,13 @@ static volatile bool Telnet_Initialized = false;
 static volatile bool Telnet_Connnected = false;
 static const char *TAG = "Telnet";
 const int CONNECTED_BIT = BIT0;
-uint64_t task_counter_value;
-bool led_state = false;
-bool received_echo_flag = true;
+uint64_t echo1_time;
+uint64_t echo2_time;
+bool triger1_state = false;
+bool triger2_state = false;
+bool received_echo1_flag = true;
+bool received_echo2_flag = true;
+bool Print_flag = false;
 int broj_socketa = -1;
 
 static esp_err_t event_handler(void *ctx, system_event_t *event) {
@@ -99,17 +107,16 @@ static void initialise_wifi(void) {
 	tcpip_adapter_init();
 	wifi_event_group = xEventGroupCreate();
 	ESP_ERROR_CHECK(esp_event_loop_init(event_handler, NULL));
-	wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT()
-	;
+	wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
 	ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-	ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
-	wifi_config_t wifi_config = { .sta = { .ssid = EXAMPLE_WIFI_SSID,
-			.password = EXAMPLE_WIFI_PASS, }, };
-	ESP_LOGI(TAG, "Setting WiFi configuration SSID %s...", wifi_config.sta.ssid);
-	ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-	ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
-	ESP_ERROR_CHECK(esp_wifi_start());
-}
+	ESP_ERROR_CHECK (esp_wifi_set_storage(WIFI_STORAGE_RAM));wifi_config_t
+	wifi_config = { .sta = { .ssid = EXAMPLE_WIFI_SSID, .password =
+	EXAMPLE_WIFI_PASS, }, };
+	ESP_LOGI(TAG, "Setting WiFi configuration SSID %s...",
+			wifi_config.sta.ssid);
+	ESP_ERROR_CHECK (esp_wifi_set_mode(WIFI_MODE_STA));ESP_ERROR_CHECK
+	(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
+	ESP_ERROR_CHECK (esp_wifi_start());}
 
 static void err_handler(void) {
 	while (1) {
@@ -119,19 +126,19 @@ static void err_handler(void) {
 
 static void ota_server_task(void * param) {
 	xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, false, true,
-	portMAX_DELAY);
+			portMAX_DELAY);
 	ota_server_start();
-	vTaskDelete(NULL);
+	vTaskDelete (NULL);
 }
 
 static esp_err_t get_telnet_msg(telnet_msg_t *pMsg) {
 	if (!pMsg)
 		return ESP_ERR_INVALID_ARG;
 
-	if ( xSemaphoreTake( xTelnetSemaphore, ( TickType_t ) 10 ) == pdTRUE) {
+	if (xSemaphoreTake(xTelnetSemaphore, (TickType_t) 10) == pdTRUE) {
 		/* We were able to obtain the semaphore and can now access the
 		 shared resource. */
-		if ( xQueueReceive( xTelnetQueue, pMsg, ( TickType_t ) 10 ) != pdPASS) {
+		if (xQueueReceive(xTelnetQueue, pMsg, (TickType_t) 10) != pdPASS) {
 			/* We have finished accessing the shared resource.  Release the
 			 semaphore. */
 			xSemaphoreGive(xTelnetSemaphore);
@@ -172,8 +179,8 @@ static void telnet_task(void *pvParameters) {
 		/* Wait for the callback to set the CONNECTED_BIT in the
 		 event group.
 		 */
-		xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT,
-		false, true, portMAX_DELAY);
+		xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, false, true,
+				portMAX_DELAY);
 
 		struct in_addr iaddr = { 0 };
 		tcpip_adapter_ip_info_t ip_info = { 0 };
@@ -244,7 +251,8 @@ static void telnet_task(void *pvParameters) {
 
 		err = lwip_fcntl_r(client_sock, F_SETFL, O_NONBLOCK);
 		if (err < 0) {
-			ESP_LOGE(TAG, "Failed to set socket to non blocking. Error %d", err);
+			ESP_LOGE(TAG, "Failed to set socket to non blocking. Error %d",
+					err);
 		}
 
 		// Receive message from client
@@ -284,15 +292,7 @@ static void telnet_task(void *pvParameters) {
 	}
 }
 
-/*
- * Initialize selected timer of the timer group 0
- *
- * timer_idx - the timer number to initialize
- * auto_reload - should the timer auto reload on alarm?
- * timer_interval_sec - the interval of alarm to set
- */
-static void example_tg0_timer_init(int timer_idx,
-bool auto_reload) {
+static void example_tg0_timer_init(int timer_idx, bool auto_reload) {
 	/* Select and initialize basic parameters of the timer */
 	timer_config_t config;
 	config.divider = TIMER_DIVIDER;
@@ -311,41 +311,80 @@ bool auto_reload) {
 }
 
 // interrupt service routine, called when the button is pressed
-void IRAM_ATTR button_isr_handler(void* arg) {
+void IRAM_ATTR echo_pin_sensor1_handler(void* arg) {
 
-	if (gpio_get_level(CONFIG_BUTTON_PIN)) {
+	if (gpio_get_level(echo_pin_sensor1)) {
 
 		timer_set_counter_value(TIMER_GROUP_0, TIMER_0, 0x00000000000);
 	}
 
-	else if (!(gpio_get_level(CONFIG_BUTTON_PIN))) {
+	else if (!(gpio_get_level(echo_pin_sensor1))) {
 		timer_get_counter_value(timer_event.timer_group, timer_event.timer_idx,
-				&task_counter_value);
-		received_echo_flag = true;
+				&echo1_time);
+		received_echo1_flag = true;
+	}
+}
+
+void IRAM_ATTR echo_pin_sensor2_handler(void* arg) {
+
+	if (gpio_get_level(echo_pin_sensor2)) {
+
+		timer_set_counter_value(TIMER_GROUP_0, TIMER_0, 0x00000000000);
+	}
+
+	else if (!(gpio_get_level(echo_pin_sensor2))) {
+		timer_get_counter_value(timer_event.timer_group, timer_event.timer_idx,
+				&echo2_time);
+		received_echo2_flag = true;
 	}
 }
 
 // task that will react to button clicks
-void triger_n_print_task() {
-	char daljina_niz[15];
-	// infinite loop
+void triger_task() {
+
 	while (1) {
-		vTaskDelay(50 / portTICK_RATE_MS);
 
-		led_state = 1;
-		gpio_set_level(CONFIG_LED_PIN, led_state);
-		ets_delay_us(12);
-		led_state = 0;
-		gpio_set_level(CONFIG_LED_PIN, led_state);
-		received_echo_flag = false;
-		task_counter_value = task_counter_value / 10; //konvert u us
-		task_counter_value = task_counter_value / 58;  //kovert u cm
+		triger1_state = 1;
+		gpio_set_level(triger_pin_sensor1, triger1_state);
+		ets_delay_us(10);
+		triger1_state = 0;
+		gpio_set_level(triger_pin_sensor1, triger1_state);
+		received_echo1_flag = false;
+		Print_flag = true;
 
-		printf("%d cm\n", (int) task_counter_value);
-		if (broj_socketa > -1) {
+		vTaskDelay(100 / portTICK_RATE_MS);
 
-			sprintf(daljina_niz, "%d cm bla\r\n", (int) task_counter_value);
-			write(broj_socketa, daljina_niz, strlen(daljina_niz));
+		triger2_state = 1;
+		gpio_set_level(triger_pin_sensor2, triger2_state);
+		ets_delay_us(10);
+		triger2_state = 0;
+		gpio_set_level(triger_pin_sensor2, triger2_state);
+		received_echo2_flag = false;
+
+		vTaskDelay(100 / portTICK_RATE_MS);
+
+	}
+}
+
+void Print_task() {
+	char daljina_niz[100];
+	int distance1 = 0;
+	int distance2 = 0;
+
+	while (1) {
+		vTaskDelay(300 / portTICK_RATE_MS);
+		if (Print_flag) {
+
+			distance1 = (int) echo1_time / 580; //konvert u us
+			distance2 = (int) echo2_time / 580; //konvert u us
+			printf(" L %d cm  |   R %d cm\r\n", distance1, distance2);
+
+			// if (broj_socketa > -1) {
+			// 	sprintf(daljina_niz, "Sensor L %d cm  |  Sensor R %d cm\r\n",distance1,distance2);
+			// 	write(broj_socketa, daljina_niz, strlen(daljina_niz));//TODO write prepravi u printf_telnet();
+			// }
+
+			Print_flag = false;
 
 		}
 	}
@@ -353,26 +392,33 @@ void triger_n_print_task() {
 
 void app_main() {
 
-	ESP_ERROR_CHECK(nvs_flash_init());
-	initialise_wifi();
+	ESP_ERROR_CHECK (nvs_flash_init());initialise_wifi();
 
 	example_tg0_timer_init(TIMER_0, TEST_WITHOUT_RELOAD);
 
 // configure button and led pins as GPIO pins
-	gpio_pad_select_gpio(CONFIG_BUTTON_PIN);
-	gpio_pad_select_gpio(CONFIG_LED_PIN);
+	gpio_pad_select_gpio(triger_pin_sensor1);
+	gpio_pad_select_gpio(echo_pin_sensor1);
+	gpio_pad_select_gpio(triger_pin_sensor2);
+	gpio_pad_select_gpio(echo_pin_sensor2);
 // set the correct direction
-	gpio_set_direction(CONFIG_BUTTON_PIN, GPIO_MODE_INPUT);
-	gpio_set_direction(CONFIG_LED_PIN, GPIO_MODE_OUTPUT);
+	gpio_set_direction(triger_pin_sensor1, GPIO_MODE_OUTPUT);
+	gpio_set_direction(echo_pin_sensor1, GPIO_MODE_INPUT);
+	gpio_set_direction(triger_pin_sensor2, GPIO_MODE_OUTPUT);
+	gpio_set_direction(echo_pin_sensor2, GPIO_MODE_INPUT);
 // enable interrupt on falling (1->0) edge for button pin
-	gpio_set_intr_type(CONFIG_BUTTON_PIN, GPIO_INTR_ANYEDGE);
+	gpio_set_intr_type(echo_pin_sensor1, GPIO_INTR_ANYEDGE);
+	gpio_set_intr_type(echo_pin_sensor2, GPIO_INTR_ANYEDGE);
 // install ISR service with default configuration
 	gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT);
 // attach the interrupt service routine
-	gpio_isr_handler_add(CONFIG_BUTTON_PIN, button_isr_handler, NULL);
+	gpio_isr_handler_add(echo_pin_sensor1, echo_pin_sensor1_handler, NULL);
+	gpio_isr_handler_add(echo_pin_sensor2, echo_pin_sensor2_handler, NULL);
 
-	xTaskCreate(&triger_n_print_task, "triger_n_print_task", 8192, NULL, 5,
-	NULL);
+	xTaskCreate(&triger_task, "triger_task", 2048, NULL, 5,
+			NULL);
+	xTaskCreate(&Print_task, "Print_task", 8192, NULL, 10,
+			NULL);
 	xTaskCreate(&telnet_task, "telnet_task", 8192, NULL, 2, NULL);
 	xTaskCreate(&ota_server_task, "ota_server_task", 4096, NULL, 5, NULL);
 }
