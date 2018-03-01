@@ -58,6 +58,7 @@
 #define triger_pin_sensor2 14
 #define echo_pin_sensor2 12
 
+
 typedef struct {
 	int type;  // the type of timer's event
 	int timer_group;
@@ -65,7 +66,9 @@ typedef struct {
 	uint64_t timer_counter_value;
 } timer_event_t;
 
-timer_event_t timer_event;
+timer_event_t timer0_event;
+timer_event_t timer1_event;
+
 static SemaphoreHandle_t xTelnetSemaphore;
 static QueueHandle_t xTelnetQueue;
 static EventGroupHandle_t wifi_event_group;
@@ -315,12 +318,12 @@ static void example_tg0_timer_init(int timer_idx, bool auto_reload) {
 void IRAM_ATTR echo_pin_sensor1_handler(void* arg) {
 
 	if (gpio_get_level(echo_pin_sensor1)) {
-
-		timer_set_counter_value(TIMER_GROUP_0, TIMER_0, 0x00000000000);
+example_tg0_timer_init(TIMER_0, TEST_WITHOUT_RELOAD);
+		//timer_set_counter_value(TIMER_GROUP_0, TIMER_1, 0x00000000000);
 	}
 
 	else if (!(gpio_get_level(echo_pin_sensor1))) {
-		timer_get_counter_value(timer_event.timer_group, timer_event.timer_idx,
+		timer_get_counter_value(timer0_event.timer_group, timer0_event.timer_idx,
 				&echo1_time);
 		received_echo1_flag = true;
 	}
@@ -329,12 +332,12 @@ void IRAM_ATTR echo_pin_sensor1_handler(void* arg) {
 void IRAM_ATTR echo_pin_sensor2_handler(void* arg) {
 
 	if (gpio_get_level(echo_pin_sensor2)) {
-
-		timer_set_counter_value(TIMER_GROUP_0, TIMER_0, 0x00000000000);
+example_tg0_timer_init(TIMER_1, TEST_WITHOUT_RELOAD);
+		//timer_set_counter_value(TIMER_GROUP_0, TIMER_0, 0x00000000000);
 	}
 
 	else if (!(gpio_get_level(echo_pin_sensor2))) {
-		timer_get_counter_value(timer_event.timer_group, timer_event.timer_idx,
+		timer_get_counter_value(timer1_event.timer_group, timer1_event.timer_idx,
 				&echo2_time);
 		received_echo2_flag = true;
 	}
@@ -345,24 +348,26 @@ void triger_task() {
 
 	while (1) {
 
-		triger1_state = 1;
-		gpio_set_level(triger_pin_sensor1, triger1_state);
-		ets_delay_us(10);
-		triger1_state = 0;
-		gpio_set_level(triger_pin_sensor1, triger1_state);
-		received_echo1_flag = false;
-		Print_flag = true;
 
-		vTaskDelay(100 / portTICK_RATE_MS);
+			triger1_state = 1;
+			gpio_set_level(triger_pin_sensor1, triger1_state);
+			ets_delay_us(10);
+			triger1_state = 0;
+			gpio_set_level(triger_pin_sensor1, triger1_state);
+			received_echo1_flag = false;
+			Print_flag = true;
 
-		triger2_state = 1;
-		gpio_set_level(triger_pin_sensor2, triger2_state);
-		ets_delay_us(10);
-		triger2_state = 0;
-		gpio_set_level(triger_pin_sensor2, triger2_state);
-		received_echo2_flag = false;
+			vTaskDelay(200 / portTICK_RATE_MS);
 
-		vTaskDelay(100 / portTICK_RATE_MS);
+			triger2_state = 1;
+			gpio_set_level(triger_pin_sensor2, triger2_state);
+			ets_delay_us(10);
+			triger2_state = 0;
+			gpio_set_level(triger_pin_sensor2, triger2_state);
+			received_echo2_flag = false;
+
+
+		vTaskDelay(200 / portTICK_RATE_MS);
 
 	}
 }
@@ -373,12 +378,14 @@ void Print_task() {
 	int distance2 = 0;
 
 	while (1) {
+
 		vTaskDelay(300 / portTICK_RATE_MS);
+
 		if (Print_flag) {
 
 			distance1 = (int) echo1_time / 580; //konvert u us
 			distance2 = (int) echo2_time / 580; //konvert u us
-			printf(" L %d cm  |   R %d cm\r\n", distance1, distance2);
+			printf(" L %d cm  |   R %d cm\r\n",distance1,distance2);
 
 			// if (broj_socketa > -1) {
 			// 	sprintf(daljina_niz, "Sensor L %d cm  |  Sensor R %d cm\r\n",distance1,distance2);
@@ -391,11 +398,22 @@ void Print_task() {
 	}
 }
 
+void debug_print()
+{
+	while(1)
+	{
+		printf("                                      %d | %d cm\r\n",(int) echo1_time,(int) echo2_time);
+		vTaskDelay(50 / portTICK_RATE_MS);
+	}
+}
+
 void app_main() {
 
-	ESP_ERROR_CHECK (nvs_flash_init());initialise_wifi();
+	ESP_ERROR_CHECK (nvs_flash_init());
+	initialise_wifi();
 
 	example_tg0_timer_init(TIMER_0, TEST_WITHOUT_RELOAD);
+	example_tg0_timer_init(TIMER_1, TEST_WITHOUT_RELOAD);
 
 // configure button and led pins as GPIO pins
 	gpio_pad_select_gpio(triger_pin_sensor1);
@@ -422,4 +440,5 @@ void app_main() {
 			NULL);
 	xTaskCreate(&telnet_task, "telnet_task", 8192, NULL, 2, NULL);
 	xTaskCreate(&ota_server_task, "ota_server_task", 4096, NULL, 5, NULL);
+	xTaskCreate(&debug_print, "debug_print", 4096, NULL, 5, NULL);
 }
