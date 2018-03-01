@@ -19,7 +19,7 @@ deps_config := \
 	/home/Kljakic/esp-idf/components/wear_levelling/Kconfig \
 	/home/Kljakic/esp-idf/components/bootloader/Kconfig.projbuild \
 	/home/Kljakic/esp-idf/components/esptool_py/Kconfig.projbuild \
-	/home/Kljakic/07_gpio_interrupts/main/Kconfig.projbuild \
+	/home/Kljakic/011LAB_ESP32_template/main/Kconfig.projbuild \
 	/home/Kljakic/esp-idf/components/partition_table/Kconfig.projbuild \
 	/home/Kljakic/esp-idf/Kconfig
 
