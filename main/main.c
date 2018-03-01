@@ -56,6 +56,7 @@
 #define triger_pin_sensor1 13
 #define echo_pin_sensor1 9
 #define triger_pin_sensor2 14
+#define echo_pin_sensor2 12
 
 typedef struct {
 	int type;  // the type of timer's event
