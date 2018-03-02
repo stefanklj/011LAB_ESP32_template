@@ -53,10 +53,10 @@
 #define EXAMPLE_WIFI_PASS CONFIG_WIFI_PASSWORD
 #define TELNET_PORT 23
 
-#define triger_pin_sensor1 13
-#define echo_pin_sensor1 9
+#define triger_pin_sensor1 9
+#define echo_pin_sensor1 13
 #define triger_pin_sensor2 14
-#define echo_pin_sensor2 12
+#define echo_pin_sensor2 27
 
 
 typedef struct {
@@ -82,7 +82,8 @@ bool triger1_state = false;
 bool triger2_state = false;
 bool received_echo1_flag = true;
 bool received_echo2_flag = true;
-bool Print_flag = false;
+bool Print_flag1 = false;
+bool Print_flag2 = false;
 int broj_socketa = -1;
 
 static esp_err_t event_handler(void *ctx, system_event_t *event) {
@@ -309,7 +310,7 @@ static void example_tg0_timer_init(int timer_idx, bool auto_reload) {
 
 	/* Timer's counter will initially start from value below.
 	 Also, if auto_reload is set, this value will be automatically reload on alarm */
-	timer_set_counter_value(TIMER_GROUP_0, timer_idx, 0x00000000000);
+	timer_set_counter_value(TIMER_GROUP_0, timer_idx, 0);
 
 	timer_start(TIMER_GROUP_0, timer_idx);
 }
@@ -318,35 +319,50 @@ static void example_tg0_timer_init(int timer_idx, bool auto_reload) {
 void IRAM_ATTR echo_pin_sensor1_handler(void* arg) {
 
 	if (gpio_get_level(echo_pin_sensor1)) {
-example_tg0_timer_init(TIMER_0, TEST_WITHOUT_RELOAD);
-		//timer_set_counter_value(TIMER_GROUP_0, TIMER_1, 0x00000000000);
+//example_tg0_timer_init(TIMER_0, TEST_WITHOUT_RELOAD);
+		timer_set_counter_value(TIMER_GROUP_0, TIMER_0, 0);
 	}
 
 	else if (!(gpio_get_level(echo_pin_sensor1))) {
-		timer_get_counter_value(timer0_event.timer_group, timer0_event.timer_idx,
+		timer_get_counter_value(TIMER_GROUP_0, TIMER_0,
 				&echo1_time);
 		received_echo1_flag = true;
+		Print_flag1 = true;
 	}
 }
 
 void IRAM_ATTR echo_pin_sensor2_handler(void* arg) {
 
 	if (gpio_get_level(echo_pin_sensor2)) {
-example_tg0_timer_init(TIMER_1, TEST_WITHOUT_RELOAD);
-		//timer_set_counter_value(TIMER_GROUP_0, TIMER_0, 0x00000000000);
+//example_tg0_timer_init(TIMER_1, TEST_WITHOUT_RELOAD);
+timer_set_counter_value(TIMER_GROUP_0, TIMER_1, 0);
 	}
 
 	else if (!(gpio_get_level(echo_pin_sensor2))) {
-		timer_get_counter_value(timer1_event.timer_group, timer1_event.timer_idx,
+		timer_get_counter_value(TIMER_GROUP_0, TIMER_1,
 				&echo2_time);
 		received_echo2_flag = true;
+		Print_flag2 = true;
 	}
 }
 
 // task that will react to button clicks
-void triger_task() {
+void triger1_task() {
 
 	while (1) {
+
+			// triger1_state = 1;
+			// triger2_state = 1;
+			// gpio_set_level(triger_pin_sensor1, triger1_state);
+			// gpio_set_level(triger_pin_sensor2, triger2_state);
+			// ets_delay_us(10);
+			// triger1_state = 0;
+			// triger2_state = 0;
+			// gpio_set_level(triger_pin_sensor1, triger1_state);
+			// gpio_set_level(triger_pin_sensor2, triger2_state);
+			// received_echo1_flag = false;
+			// received_echo2_flag = false;
+ 			// vTaskDelay(100 / portTICK_RATE_MS);
 
 
 			triger1_state = 1;
@@ -355,19 +371,28 @@ void triger_task() {
 			triger1_state = 0;
 			gpio_set_level(triger_pin_sensor1, triger1_state);
 			received_echo1_flag = false;
-			Print_flag = true;
-
 			vTaskDelay(200 / portTICK_RATE_MS);
+
 
 			triger2_state = 1;
 			gpio_set_level(triger_pin_sensor2, triger2_state);
-			ets_delay_us(10);
+			ets_delay_us(12);
 			triger2_state = 0;
 			gpio_set_level(triger_pin_sensor2, triger2_state);
 			received_echo2_flag = false;
+			vTaskDelay(200 / portTICK_RATE_MS);
+	}
+}
+
+// task that will react to button clicks
+void triger2_task() {
+
+	while (1) {
+
+			ets_delay_us(10);
 
 
-		vTaskDelay(200 / portTICK_RATE_MS);
+		vTaskDelay(60 / portTICK_RATE_MS);
 
 	}
 }
@@ -379,33 +404,32 @@ void Print_task() {
 
 	while (1) {
 
-		vTaskDelay(300 / portTICK_RATE_MS);
+		vTaskDelay(100 / portTICK_RATE_MS);
 
-		if (Print_flag) {
-
-			distance1 = (int) echo1_time / 580; //konvert u us
-			distance2 = (int) echo2_time / 580; //konvert u us
-			printf(" L %d cm  |   R %d cm\r\n",distance1,distance2);
-
-			// if (broj_socketa > -1) {
-			// 	sprintf(daljina_niz, "Sensor L %d cm  |  Sensor R %d cm\r\n",distance1,distance2);
-			// 	write(broj_socketa, daljina_niz, strlen(daljina_niz));//TODO write prepravi u printf_telnet();
-			// }
-
-			Print_flag = false;
-
+		if (Print_flag1 || Print_flag2) {
+		distance1 = (int) echo1_time / 580; //konvert u us
+		distance2 = (int) echo2_time / 580; //konvert u us
+			printf(" L %d cm  |\r\n",distance1);
+			if (broj_socketa > -1) {
+				//sprintf(daljina_niz, " L %d cm  |     %d cm\r\n",distance1,distance2);
+				sprintf(daljina_niz, "$%d %d;",distance2+400,distance1);
+				write(broj_socketa, daljina_niz, strlen(daljina_niz));//TODO write prepravi u printf_telnet();
+			}
+			Print_flag1 = false;
 		}
+
+		// if (Print_flag2) {
+		// 	distance2 = (int) echo2_time / 580; //konvert u us
+		// 	printf("          |   R %d cm\r\n",distance2);
+		// 	if (broj_socketa > -1) {
+		// 		sprintf(daljina_niz, "          |   R %d cm\r\n",distance2);
+		// 		write(broj_socketa, daljina_niz, strlen(daljina_niz));//TODO write prepravi u printf_telnet();
+		// 	}
+		// 	Print_flag2 = false;
+		// }
 	}
 }
 
-void debug_print()
-{
-	while(1)
-	{
-		printf("                                      %d | %d cm\r\n",(int) echo1_time,(int) echo2_time);
-		vTaskDelay(50 / portTICK_RATE_MS);
-	}
-}
 
 void app_main() {
 
@@ -434,11 +458,14 @@ void app_main() {
 	gpio_isr_handler_add(echo_pin_sensor1, echo_pin_sensor1_handler, NULL);
 	gpio_isr_handler_add(echo_pin_sensor2, echo_pin_sensor2_handler, NULL);
 
-	xTaskCreate(&triger_task, "triger_task", 2048, NULL, 5,
+	xTaskCreate(&triger1_task, "triger1_task", 2048, NULL, 6,
 			NULL);
+			xTaskCreate(&triger2_task, "triger2_task", 2048, NULL, 6,
+					NULL);
+
 	xTaskCreate(&Print_task, "Print_task", 8192, NULL, 10,
 			NULL);
 	xTaskCreate(&telnet_task, "telnet_task", 8192, NULL, 2, NULL);
 	xTaskCreate(&ota_server_task, "ota_server_task", 4096, NULL, 5, NULL);
-	xTaskCreate(&debug_print, "debug_print", 4096, NULL, 5, NULL);
+
 }

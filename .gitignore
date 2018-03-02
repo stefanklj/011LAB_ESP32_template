@@ -13,3 +13,7 @@
 *.map
 *.elf
 *.bin
+*.a
+*.a
+*.elf
+*.bin
